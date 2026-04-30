@@ -1,4 +1,0 @@
-client,frame,io_time_ms,cpu,ram,frame_size_bytes,cipher_mode
-127.0.0.1:52109,1,0.0,0.0,52.109375,3481,SALSA20-LIB
-127.0.0.1:52109,2,0.0,0.0,52.109375,2991,SALSA20-LIB
-127.0.0.1:52109,3,0.0,0.0,52.11328125,3443,SALSA20-LIB
