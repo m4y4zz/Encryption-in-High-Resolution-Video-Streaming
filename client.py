@@ -176,8 +176,8 @@ def receive_thread(selected_cipher_mode):
             STATE.is_streaming = False
             return
             
-        key_iv = receive_all(s, 16) # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
-        if key_iv is None or len(key_iv) != 16: # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
+        key_iv = receive_all(s, 32) # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
+        if key_iv is None or len(key_iv) != 32: # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
             root.after(0, lambda: messagebox.showerror("Error", "Failed to receive the key."))
             STATE.is_streaming = False
             return

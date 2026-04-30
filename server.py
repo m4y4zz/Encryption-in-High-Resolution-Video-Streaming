@@ -29,8 +29,7 @@ VIDEO_FILE = 'test_video.mp4'
 #NONCE_SIZE=12
 NONCE_SIZE = 16
 
-KEY_SIZE = 16
-#KEY_SIZE = 32
+KEY_SIZE = 32
 #########################
 
 GLOBAL_KEY = token_bytes(KEY_SIZE)

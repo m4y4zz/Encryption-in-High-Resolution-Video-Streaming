@@ -10,10 +10,9 @@ from Crypto.Cipher import Blowfish
 from cryptography.hazmat.primitives import padding
 from secrets import token_bytes
 
-# Choose the key size and block size values that correspond to the cipher that will be tested, confirm Table I. on the readme file.
+# Choose the block size value that correspond to the cipher that will be tested, confirm Table I. on the readme file.
 ###################
-KEY_SIZE = 16
-#KEY_SIZE = 32
+KEY_SIZE = 32
 
 #BLOCK_SIZE = 8
 BLOCK_SIZE = 16
