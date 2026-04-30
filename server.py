@@ -19,8 +19,8 @@ FRAME_BUFFER_SIZE = 4096
 
 # Choose one of the video options.
 #########################
-VIDEO_FILE = 'bbb_sunflower_2160p_60fps_normal.mp4' 
-#VIDEO_FILE = 'test_video.mp4'
+#VIDEO_FILE = 'bbb_sunflower_2160p_60fps_normal.mp4' 
+VIDEO_FILE = 'test_video.mp4'
 #########################
 
 # Choose the key size and nonce values that correspond to the cipher that will be tested, confirm Table I. on the readme file.
