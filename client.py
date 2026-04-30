@@ -54,7 +54,7 @@ def monitor_system_load(process):
 def export_client_metrics():
     with METRICS_LOCK:
         if not CLIENT_METRICS_LOG:
-            print("[METRIC] No client data to export.AAAAAAAASA")
+            print("[METRIC] No client data to export.FEWFWEGRE")
             return
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
