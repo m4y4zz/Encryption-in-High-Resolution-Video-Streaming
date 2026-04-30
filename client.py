@@ -165,6 +165,10 @@ def receive_thread(selected_cipher_mode):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     CLIENT_SOCKET = s
     
+    #NOVO 2 LINHAS
+    conf = encrypt.CIPHER_CONFIG.get(selected_cipher_mode)
+    nonce_len = conf['NONCE_SIZE']
+
     try:
         s.connect((HOST, PORT))
         
@@ -196,7 +200,8 @@ def receive_thread(selected_cipher_mode):
         STATE.cipher_mode = selected_cipher_mode
         
         while STATE.is_streaming:
-            frame_nonce = receive_all(s, 16) # Remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file.
+            #frame_nonce = receive_all(s, 16) # Remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file.
+            frame_nonce = receive_all(s, nonce_len)
             if frame_nonce is None:
                 break
                 
@@ -217,7 +222,7 @@ def receive_thread(selected_cipher_mode):
             if encrypted_data is None:
                 break
 
-            STATE.total_bytes_received += 16 + 8 + frame_size # For the first number, remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file. Leave the second one as it is.
+            STATE.total_bytes_received += nonce_len + 8 + frame_size # For the first number, remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file. Leave the second one as it is.
             try:
                 FRAME_QUEUE.put((frame_nonce, encrypted_data), timeout=0.001) 
             except queue.Full:

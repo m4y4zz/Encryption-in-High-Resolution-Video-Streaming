@@ -1,0 +1,2 @@
+client,frame,io_time_ms,cpu,ram,frame_size_bytes,cipher_mode
+127.0.0.1:58870,1,0.0,0.0,52.24609375,3481,BLOWFISH-LIB

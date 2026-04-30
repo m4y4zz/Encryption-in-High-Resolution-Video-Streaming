@@ -20,6 +20,15 @@ BLOCK_SIZE = 16
 
 GLOBAL_KEY = token_bytes(KEY_SIZE)
 
+###NOVO
+CIPHER_CONFIG = {
+    "AES-CTR-LIB":   {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 16},
+    "CHACHA20-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 16},
+    "SALSA20-LIB":   {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 8},
+    "BLOWFISH-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 8, "NONCE_SIZE": 8},
+    "CAMELLIA-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 8}
+}
+###
 
 def aes_ctr_mode_lib(data: bytes, key: bytes, nonce: bytes) -> bytes:
     cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())

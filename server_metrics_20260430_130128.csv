@@ -1,0 +1,3 @@
+client,frame,io_time_ms,cpu,ram,frame_size_bytes,cipher_mode
+127.0.0.1:54910,1,0.0,0.0,52.1640625,3481,CAMELLIA-LIB
+127.0.0.1:54910,2,0.0,0.0,52.16796875,2991,CAMELLIA-LIB

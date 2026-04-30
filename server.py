@@ -27,7 +27,7 @@ VIDEO_FILE = 'test_video.mp4'
 #########################
 #NONCE_SIZE=8
 #NONCE_SIZE=12
-NONCE_SIZE = 16
+#NONCE_SIZE = 16
 
 KEY_SIZE = 32
 #########################
@@ -43,6 +43,7 @@ FRAME_QUEUE = queue.Queue(maxsize=10)
 
 SERVER_METRICS_LOG = []
 METRICS_LOCK = threading.Lock()
+CURRENT_CIPHER_MODE = "AES-CTR-LIB"#NOVO
 
 def monitor_system_load(process):
     cpu_percent = process.cpu_percent(interval=None) 
@@ -64,7 +65,7 @@ def export_metrics_to_csv():
     print(f"\n[METRIC] Data was successfully exported to: {filename}")
 
 def handle_client_consumer(conn: socket.socket, addr):
-    global SERVER_RUNNING
+    global SERVER_RUNNING, CURRENT_CIPHER_MODE
     print(f"[*] Connection Accepted from {addr}")
     
     bytes_sent = 0
@@ -77,8 +78,8 @@ def handle_client_consumer(conn: socket.socket, addr):
         if mode_choice not in AVAILABLE_CIPHERS:
             conn.sendall(b"ERROR: Invalid Mode")
             raise ValueError(f"Client requested an invalid mode: {mode_choice}")
-            
-        print(f" | Client {addr} selected cipher: {mode_choice}")
+        CURRENT_CIPHER_MODE = mode_choice  #NOVO  
+        print(f" | Client {addr} selected cipher: {CURRENT_CIPHER_MODE}")
 
         conn.sendall(b"KEY_START")
         time.sleep(0.01) 
@@ -123,7 +124,7 @@ def handle_client_consumer(conn: socket.socket, addr):
                     'cpu': cpu_load,
                     'ram': memory_usage,
                     'frame_size_bytes': frame_size,
-                    'cipher_mode': mode_choice
+                    'cipher_mode': CURRENT_CIPHER_MODE #NOVO
                 })
             
             print(f" | Client {addr} | Frame {frame_count} | Sending I/O: {frame_encrypt_time*1000:.3f}ms | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB")
@@ -147,7 +148,7 @@ def handle_client_consumer(conn: socket.socket, addr):
 
 def producer_thread(cap: cv2.VideoCapture):
     
-    global SERVER_RUNNING, FRAME_SENT_COUNT
+    global SERVER_RUNNING, FRAME_SENT_COUNT, CURRENT_CIPHER_MODE
     
     fps = cap.get(cv2.CAP_PROP_FPS)
     sleep_time = 1 / fps if fps > 0 else 1 / 30 
@@ -171,17 +172,19 @@ def producer_thread(cap: cv2.VideoCapture):
             _, encoded_frame = cv2.imencode('.jpg', frame, encode_param)
             frame_data = encoded_frame.tobytes()
             
-            frame_nonce = os.urandom(NONCE_SIZE)
+            conf=encrypt.CIPHER_CONFIG.get(CURRENT_CIPHER_MODE)
+            frame_nonce = os.urandom(conf['NONCE_SIZE'])
+            #frame_nonce = os.urandom(NONCE_SIZE) COMENTEI AGORAAAAA
             
             # Remove the # from the line corresponding to the cipher you want to test, and leave the others commented out.
             
             #cipher_mode="AES-128-CTR-MAN"
-            cipher_mode="AES-CTR-LIB"
+            #cipher_mode="AES-CTR-LIB"
             #cipher_mode= "CHACHA20-LIB"
             #cipher_mode= "SALSA20-LIB" 
             #cipher_mode ="BLOWFISH-LIB"    
             #cipher_mode="CAMELLIA-LIB"
-            encrypted_data = encrypt.encrypt_dataA(GLOBAL_KEY, frame_data, cipher_mode, frame_nonce) 
+            encrypted_data = encrypt.encrypt_dataA(GLOBAL_KEY, frame_data, CURRENT_CIPHER_MODE, frame_nonce) 
             
             try:
                 
