@@ -10,17 +10,6 @@ from Crypto.Cipher import Blowfish
 from cryptography.hazmat.primitives import padding
 from secrets import token_bytes
 
-# Choose the block size value that correspond to the cipher that will be tested, confirm Table I. on the readme file.
-###################
-KEY_SIZE = 32
-
-#BLOCK_SIZE = 8
-BLOCK_SIZE = 16
-####################
-
-GLOBAL_KEY = token_bytes(KEY_SIZE)
-
-###NOVO
 CIPHER_CONFIG = {
     "AES-CTR-LIB":   {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 16},
     "CHACHA20-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 16},
@@ -28,7 +17,7 @@ CIPHER_CONFIG = {
     "BLOWFISH-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 8, "NONCE_SIZE": 8},
     "CAMELLIA-LIB":  {"KEY_SIZE": 32, "BLOCK_SIZE": 16, "NONCE_SIZE": 8}
 }
-###
+
 
 def aes_ctr_mode_lib(data: bytes, key: bytes, nonce: bytes) -> bytes:
     cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())

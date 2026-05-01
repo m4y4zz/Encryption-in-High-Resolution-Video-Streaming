@@ -66,9 +66,9 @@ def export_client_metrics():
                 dict_writer = csv.DictWriter(f, fieldnames=keys)
                 dict_writer.writeheader()
                 dict_writer.writerows(CLIENT_METRICS_LOG)
-            print(f"\n[OK] CLIENT METRICS SAVED: {filename}")
+            print(f"\n[OK] Client Metrics Saved: {filename}")
         except Exception as e:
-            print(f"[ERROR] Failed to save client CSV: {e}")
+            print(f"[METRIC] Failed to save client CSV: {e}")
   
 def receive_all(sock, n):
     data = b''
@@ -165,7 +165,6 @@ def receive_thread(selected_cipher_mode):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     CLIENT_SOCKET = s
     
-    #NOVO 2 LINHAS
     conf = encrypt.CIPHER_CONFIG.get(selected_cipher_mode)
     nonce_len = conf['NONCE_SIZE']
 
@@ -180,8 +179,8 @@ def receive_thread(selected_cipher_mode):
             STATE.is_streaming = False
             return
             
-        key_iv = receive_all(s, 32) # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
-        if key_iv is None or len(key_iv) != 32: # Remove the 16 and enter the correct key value corresponding to the cipher to be tested, confirm Table I. on the readme file.
+        key_iv = receive_all(s, 32) 
+        if key_iv is None or len(key_iv) != 32: 
             root.after(0, lambda: messagebox.showerror("Error", "Failed to receive the key."))
             STATE.is_streaming = False
             return
@@ -194,13 +193,12 @@ def receive_thread(selected_cipher_mode):
             return
             
         STATE.fps = float(stream_header.split(':')[-1])
-        print(f"[*] Stream started. Expected FPS: {STATE.fps}")
+        print(f"Stream started. Expected FPS: {STATE.fps}")
         
         STATE.start_time = time.monotonic() 
         STATE.cipher_mode = selected_cipher_mode
         
         while STATE.is_streaming:
-            #frame_nonce = receive_all(s, 16) # Remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file.
             frame_nonce = receive_all(s, nonce_len)
             if frame_nonce is None:
                 break
@@ -222,7 +220,7 @@ def receive_thread(selected_cipher_mode):
             if encrypted_data is None:
                 break
 
-            STATE.total_bytes_received += nonce_len + 8 + frame_size # For the first number, remove the 16 and enter the correct nonce value corresponding to the cipher to be tested, confirm Table I. on the readme file. Leave the second one as it is.
+            STATE.total_bytes_received += nonce_len + 8 + frame_size 
             try:
                 FRAME_QUEUE.put((frame_nonce, encrypted_data), timeout=0.001) 
             except queue.Full:
@@ -230,7 +228,7 @@ def receive_thread(selected_cipher_mode):
             
             
             if STATE.frame_count % 50 == 0 and STATE.consumer_is_running:
-                print(f" | [PRODUCER] Frames in the Queue: {FRAME_QUEUE.qsize()}/{FRAME_QUEUE.maxsize} | Bytes Recieved: {STATE.total_bytes_received}")
+                print(f"[PRODUCER] Frames in the Queue: {FRAME_QUEUE.qsize()}/{FRAME_QUEUE.maxsize} | Bytes Recieved: {STATE.total_bytes_received}")
 
         cv2.destroyAllWindows() 
         export_client_metrics()
@@ -238,7 +236,7 @@ def receive_thread(selected_cipher_mode):
     except ConnectionRefusedError:
         root.after(0, lambda: messagebox.showerror("Connection Error", "Unable to connect to the server."))
     except ConnectionAbortedError:
-        print("[*] Connection aborted (clean terminate).")
+        print("Connection aborted (clean terminate).")
     except Exception as e:
         if STATE.is_streaming:
             root.after(0, lambda err=e: messagebox.showerror("Stream Error", f"Error in the receiving thread: {err}"))
@@ -251,7 +249,7 @@ def receive_thread(selected_cipher_mode):
             CLIENT_SOCKET = None
             
         STATE.is_streaming = False
-        print("[*] The reception thread has been closed.")
+        print("The reception thread has been closed.")
 
 def decrypt_and_display_thread():
     
@@ -296,7 +294,7 @@ def decrypt_and_display_thread():
                         STATE.frame_count += 1
                         
                         cpu_load, memory_usage = monitor_system_load(server_process)
-                        print(f" | Frame {STATE.frame_count} | Decrypts: {frame_decrypt_time*1000:.3f}ms | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB | Queue: {FRAME_QUEUE.qsize()}")
+                        print(f"Frame {STATE.frame_count} | Decrypts: {frame_decrypt_time*1000:.3f}ms | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB | Queue: {FRAME_QUEUE.qsize()}")
                         
                         
                         with METRICS_LOCK:
@@ -317,10 +315,10 @@ def decrypt_and_display_thread():
             
 
     except Exception as e:
-        print(f"[CONSUMER ERROR] Exception in the Consumer thread: {e}")
+        print(f"[ERROR] Exception in the Consumer thread: {e}")
     finally:
         STATE.consumer_is_running = False
-        print("[*] Decrypting and Exhibiting Thread closed.")
+        print("Decrypting and Exhibiting Thread closed.")
 
 def stop_stream_client():
     global STATE
@@ -330,14 +328,14 @@ def stop_stream_client():
         return
     
     STATE.is_streaming = False
-    print("\n[!] Initiating controlled shutdown of the stream...")
+    print("\nInitiating controlled shutdown of the stream...")
     
     if CLIENT_SOCKET:
         try:
             CLIENT_SOCKET.close()
-            print("[!] Client socket closed.")
+            print("Client socket closed.")
         except Exception as e:
-            print(f"[!] Warning: Error closing socket: {e}") 
+            print(f"Warning: Error closing socket: {e}") 
         CLIENT_SOCKET = None
         
     stop_button.config(state=tk.DISABLED)
@@ -359,7 +357,7 @@ def check_threads_status():
     else:
         total_time = time.monotonic() - (STATE.start_time if STATE.start_time else time.monotonic())
         update_ui_performance(total_time)
-        print("[*] All threads closed. UI updated.")
+        print("All threads closed. UI updated.")
         
 # ----------------------------------------------------------------------
 # GUI SETUP (Tkinter)
