@@ -10,4 +10,9 @@ This project consists of a client-server infrastructure developed in Python for 
 ###Running the Project
 
 ###Preview
-
+## Demonstração do Projeto
+<div align="center">
+  <video src="https://github.com/m4y4zz/Encryption-in-High-Resolution-Video-Streaming/raw/refs/heads/main/DEMO.mp4" width="100%" controls>
+    O seu navegador não suporta a visualização de vídeos.
+  </video>
+</div>
