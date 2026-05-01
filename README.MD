@@ -5,7 +5,7 @@ This project consists of a client-server infrastructure developed in Python for 
 ### Preview
 
 <div align="center">
-  <video src="https://github.com/m4y4zz/Encryption-in-High-Resolution-Video-Streaming/issues/1#issue-4365194500" width="100%" controls>
+  <video src="https://github.com/user-attachments/assets/0648af57-0f71-43d9-bfe4-e91acddb9539" width="100%" controls>
     O seu navegador não suporta a visualização de vídeos.
   </video>
 </div>
