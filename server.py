@@ -18,19 +18,12 @@ PORT = 65432
 FRAME_BUFFER_SIZE = 4096 
 
 # Choose one of the video options.
-#########################
+####################################################
 #VIDEO_FILE = 'bbb_sunflower_2160p_60fps_normal.mp4' 
 VIDEO_FILE = 'test_video.mp4'
-#########################
-
-# Choose the key size and nonce values that correspond to the cipher that will be tested, confirm Table I. on the readme file.
-#########################
-#NONCE_SIZE=8
-#NONCE_SIZE=12
-#NONCE_SIZE = 16
+####################################################
 
 KEY_SIZE = 32
-#########################
 
 GLOBAL_KEY = token_bytes(KEY_SIZE)
 SERVER_RUNNING = True
@@ -39,11 +32,9 @@ SERVER_SOCKET = None
 
 HEADER_SIZE = 8
 AVAILABLE_CIPHERS = ["AES-CTR-LIB", "CHACHA20-LIB", "SALSA20-LIB", "BLOWFISH-LIB", "CAMELLIA-LIB"]
-FRAME_QUEUE = queue.Queue(maxsize=10)
 
 SERVER_METRICS_LOG = []
 METRICS_LOCK = threading.Lock()
-CURRENT_CIPHER_MODE = "AES-CTR-LIB"#NOVO
 
 def monitor_system_load(process):
     cpu_percent = process.cpu_percent(interval=None) 
@@ -64,226 +55,229 @@ def export_metrics_to_csv():
         dict_writer.writerows(SERVER_METRICS_LOG)
     print(f"\n[METRIC] Data was successfully exported to: {filename}")
 
-def handle_client_consumer(conn: socket.socket, addr):
-    global SERVER_RUNNING, CURRENT_CIPHER_MODE
-    print(f"[*] Connection Accepted from {addr}")
-    
-    bytes_sent = 0
-    start_time = time.monotonic()
-    frame_count = 0
-    server_process = psutil.Process(os.getpid())
-    
-    try:
-        mode_choice = conn.recv(1024).decode('utf-8').strip() 
-        if mode_choice not in AVAILABLE_CIPHERS:
-            conn.sendall(b"ERROR: Invalid Mode")
-            raise ValueError(f"Client requested an invalid mode: {mode_choice}")
-        CURRENT_CIPHER_MODE = mode_choice  #NOVO  
-        print(f" | Client {addr} selected cipher: {CURRENT_CIPHER_MODE}")
-
-        conn.sendall(b"KEY_START")
-        time.sleep(0.01) 
-        conn.sendall(GLOBAL_KEY)
-        print(f" | Client {addr}: Key was sent. Starting...")
-        
-        fps = 60.0 
-        conn.sendall(f"STREAM_START:{fps}".encode('utf-8'))
-        time.sleep(0.01)
-
-        while SERVER_RUNNING:
-            
-            try:
-                frame_nonce, encrypted_data = FRAME_QUEUE.get(timeout=0.5) 
-                FRAME_QUEUE.task_done() 
-            
-            except queue.Empty:
-                if not PRODUCER_THREAD.is_alive() and FRAME_QUEUE.empty(): 
-                    break
-                continue
-            
-            frame_encrypt_start = time.monotonic() 
-            
-            conn.sendall(frame_nonce)
-            frame_size = len(encrypted_data)
-            size_header = frame_size.to_bytes(HEADER_SIZE, 'big') 
-            
-            conn.sendall(size_header)  
-            conn.sendall(encrypted_data)
-            
-            frame_encrypt_time = time.monotonic() - frame_encrypt_start 
-            bytes_sent += len(frame_nonce) + len(size_header) + frame_size
-            frame_count += 1
-            cpu_load, memory_usage = monitor_system_load(server_process)
-            frame_io_start = time.monotonic()
-            frame_io_time = time.monotonic() - frame_io_start
-            with METRICS_LOCK:
-                SERVER_METRICS_LOG.append({
-                    'client': f"{addr[0]}:{addr[1]}",
-                    'frame': frame_count,
-                    'io_time_ms': frame_io_time * 1000,
-                    'cpu': cpu_load,
-                    'ram': memory_usage,
-                    'frame_size_bytes': frame_size,
-                    'cipher_mode': CURRENT_CIPHER_MODE #NOVO
-                })
-            
-            print(f" | Client {addr} | Frame {frame_count} | Sending I/O: {frame_encrypt_time*1000:.3f}ms | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB")
-            
-        conn.sendall(b"STREAM_END")
-        
-        total_time = time.monotonic() - start_time
-        throughput = (bytes_sent / total_time) * 8 / (1024 * 1024) 
-        
-        print(f"\n[+] Client {addr} Stream Finished. Total Time: {total_time:.4f}s")
-        print(f"[+] Client {addr} Throughput (Total): {throughput:.2f} Mbps")
-
-    except ConnectionResetError:
-        print(f"[*] Client {addr} desconected.")
-    except Exception as e:
-        print(f"[*] Error in client thread {addr}: {e}")
-    finally:
-        conn.close()
-        export_metrics_to_csv()
-        print(f"[*] Connection with {addr} closed.")
-
-def producer_thread(cap: cv2.VideoCapture):
-    
-    global SERVER_RUNNING, FRAME_SENT_COUNT, CURRENT_CIPHER_MODE
-    
+def producer_thread(cap: cv2.VideoCapture, frame_queue: queue.Queue, cipher_mode: str, running_event: threading.Event):
+    """
+    Producer thread: reads frames from the video, encrypts them with the
+    cipher chosen by the client, and puts them in the per-client queue.
+    """
     fps = cap.get(cv2.CAP_PROP_FPS)
-    sleep_time = 1 / fps if fps > 0 else 1 / 30 
+    sleep_time = 1 / fps if fps > 0 else 1 / 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    FRAME_SENT_COUNT=total_frames
     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
     server_process = psutil.Process(os.getpid())
-    
-    print(f"\n[PRODUCER] Production thread started. Target FPS: {fps:.2f}. Total Frames: {total_frames}")
+    frame_sent_count = 0
+
+    conf = encrypt.CIPHER_CONFIG.get(cipher_mode)
+    if conf is None:
+        print(f"[PRODUCER] Unknown cipher mode: {cipher_mode}")
+        running_event.clear()
+        cap.release()
+        return
+
+    nonce_size = conf['NONCE_SIZE']
+
+    print(f"\n[PRODUCER] Started. Cipher: {cipher_mode} | Nonce: {nonce_size}B | FPS: {fps:.2f} | Frames: {total_frames}")
 
     try:
-        while SERVER_RUNNING and cap.isOpened():
+        while running_event.is_set() and cap.isOpened():
             frame_start = time.monotonic()
-            ret, frame = cap.read() 
-            
+            ret, frame = cap.read()
+
             if not ret:
-                print("[PRODUCER] End of video source/camera. Stoping the producer..")
-                SERVER_RUNNING = False
+                print("[PRODUCER] End of video. Stopping producer...")
                 break
 
             _, encoded_frame = cv2.imencode('.jpg', frame, encode_param)
             frame_data = encoded_frame.tobytes()
-            
-            conf=encrypt.CIPHER_CONFIG.get(CURRENT_CIPHER_MODE)
-            frame_nonce = os.urandom(conf['NONCE_SIZE'])
-            #frame_nonce = os.urandom(NONCE_SIZE) COMENTEI AGORAAAAA
-            
-            # Remove the # from the line corresponding to the cipher you want to test, and leave the others commented out.
-            
-            #cipher_mode="AES-128-CTR-MAN"
-            #cipher_mode="AES-CTR-LIB"
-            #cipher_mode= "CHACHA20-LIB"
-            #cipher_mode= "SALSA20-LIB" 
-            #cipher_mode ="BLOWFISH-LIB"    
-            #cipher_mode="CAMELLIA-LIB"
-            encrypted_data = encrypt.encrypt_dataA(GLOBAL_KEY, frame_data, CURRENT_CIPHER_MODE, frame_nonce) 
-            
+
+            frame_nonce = os.urandom(nonce_size)
+            encrypted_data = encrypt.encrypt_dataA(GLOBAL_KEY, frame_data, cipher_mode, frame_nonce)
+
             try:
-                
-                FRAME_QUEUE.put((frame_nonce, encrypted_data), timeout=0.01) 
-                FRAME_SENT_COUNT += 1
+                frame_queue.put((frame_nonce, encrypted_data), timeout=0.5)
+                frame_sent_count += 1
             except queue.Full:
-                pass 
-            
+                pass  
+
             time_spent = time.monotonic() - frame_start
             wait_time = sleep_time - time_spent
             if wait_time > 0:
                 time.sleep(wait_time)
-            
-            if FRAME_SENT_COUNT % 50 == 0:
-                 cpu_load, memory_usage = monitor_system_load(server_process)
-                 print(f" | [PRODUCER] Encripted Frames: {FRAME_SENT_COUNT} | Queue: {FRAME_QUEUE.qsize()}/{FRAME_QUEUE.maxsize} | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB")
+
+            if frame_sent_count % 50 == 0:
+                cpu_load, memory_usage = monitor_system_load(server_process)
+                print(f" | [PRODUCER] Encrypted Frames: {frame_sent_count} | Queue: {frame_queue.qsize()}/{frame_queue.maxsize} | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB")
 
     except Exception as e:
-        print(f"[PRODUCER] Exception in the Producer thread: {e}")
-        SERVER_RUNNING = False
+        print(f"[PRODUCER] Exception: {e}")
     finally:
         cap.release()
+        running_event.clear()  
         print("[PRODUCER] Production thread closed.")
 
-def shutdown_handler(signum, frame):
-    
+def handle_client(conn: socket.socket, addr):
+    """
+    Handles a single client connection end-to-end:
+      1. Receive cipher choice
+      2. Send key
+      3. Start a dedicated producer thread for this client
+      4. Stream encrypted frames
+    """
     global SERVER_RUNNING
-    global SERVER_SOCKET
-    
-    print("\n[!] Interrupt signal received. Initiating controlled shutdown....")
+    print(f"Connection accepted from {addr}")
+
+    bytes_sent = 0
+    start_time = time.monotonic()
+    frame_count = 0
+    server_process = psutil.Process(os.getpid())
+
+    try:
+        # Handshake: receive cipher choice
+        mode_choice = conn.recv(1024).decode('utf-8').strip()
+        if mode_choice not in AVAILABLE_CIPHERS:
+            conn.sendall(b"ERROR: Invalid Mode")
+            raise ValueError(f"Client {addr} requested invalid cipher: {mode_choice}")
+
+        cipher_mode = mode_choice
+        conf = encrypt.CIPHER_CONFIG[cipher_mode]
+        nonce_size = conf['NONCE_SIZE']
+        print(f"Client {addr} selected cipher: {cipher_mode} (nonce={nonce_size}B)")
+
+        # Send key
+        conn.sendall(b"KEY_START")
+        time.sleep(0.01)
+        conn.sendall(GLOBAL_KEY)
+        print(f"Key sent to {addr}.")
+
+        # Open video and start per-client producer
+        cap = cv2.VideoCapture(VIDEO_FILE)
+        if not cap.isOpened():
+            conn.sendall(b"ERROR: Video not found")
+            raise RuntimeError(f"Cannot open video file: {VIDEO_FILE}")
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        conn.sendall(f"STREAM_START:{fps}".encode('utf-8'))
+        time.sleep(0.01)
+
+        frame_queue = queue.Queue(maxsize=10)
+        running_event = threading.Event()
+        running_event.set()
+
+        producer = threading.Thread(
+            target=producer_thread,
+            args=(cap, frame_queue, cipher_mode, running_event),
+            name=f"Producer-{addr[1]}",
+            daemon=True
+        )
+        producer.start()
+
+        # Stream loop
+        while SERVER_RUNNING:
+            try:
+                frame_nonce, encrypted_data = frame_queue.get(timeout=0.5)
+                frame_queue.task_done()
+            except queue.Empty:
+                # Stop when producer is done and queue is empty
+                if not producer.is_alive() and frame_queue.empty():
+                    break
+                continue
+
+            send_start = time.monotonic()
+
+            conn.sendall(frame_nonce)
+            frame_size = len(encrypted_data)
+            conn.sendall(frame_size.to_bytes(HEADER_SIZE, 'big'))
+            conn.sendall(encrypted_data)
+
+            send_time = time.monotonic() - send_start
+            bytes_sent += nonce_size + HEADER_SIZE + frame_size
+            frame_count += 1
+
+            cpu_load, memory_usage = monitor_system_load(server_process)
+
+            with METRICS_LOCK:
+                SERVER_METRICS_LOG.append({
+                    'client': f"{addr[0]}:{addr[1]}",
+                    'frame': frame_count,
+                    'send_time_ms': send_time * 1000,
+                    'cpu': cpu_load,
+                    'ram': memory_usage,
+                    'frame_size_bytes': frame_size,
+                    'cipher_mode': cipher_mode,
+                })
+
+            print(f"Client {addr} | Frame {frame_count} | Send: {send_time*1000:.3f}ms | CPU: {cpu_load:.1f}% | RAM: {memory_usage:.1f}MB")
+
+        conn.sendall(b"STREAM_END")
+
+        total_time = time.monotonic() - start_time
+        throughput = (bytes_sent / total_time) * 8 / (1024 * 1024)
+        print(f"\nClient {addr} stream finished. Time: {total_time:.4f}s | Throughput: {throughput:.2f} Mbps")
+
+    except ConnectionResetError:
+        print(f"Client {addr} disconnected unexpectedly.")
+    except Exception as e:
+        print(f"Error handling client {addr}: {e}")
+    finally:
+        conn.close()
+        export_metrics_to_csv()
+        print(f"Connection with {addr} closed.")
+
+def shutdown_handler(signum, frame):
+    global SERVER_RUNNING, SERVER_SOCKET
+    print("\nInterrupt signal received. Shutting down...")
     SERVER_RUNNING = False
-    
     if SERVER_SOCKET:
         try:
-            SERVER_SOCKET.close() 
-            print("[!] Closed listening socket.")
+            SERVER_SOCKET.close()
         except Exception as e:
-            print(f"[!] Warning: Error closing socket: {e}")
+            print(f"Warning closing socket: {e}")
 
 def start_server():
-    
-    global SERVER_SOCKET
-    global CLIENT_THREADS
-    global PRODUCER_THREAD
-    global SERVER_RUNNING
-    
+    global SERVER_SOCKET, CLIENT_THREADS, SERVER_RUNNING
+
     signal.signal(signal.SIGINT, shutdown_handler)
 
-    cap = cv2.VideoCapture(VIDEO_FILE)
-    if not cap.isOpened():
-        print(f"CRITICAL ERROR: Could not open video source. ({VIDEO_FILE}).")
-        if not os.path.exists(VIDEO_FILE):
-             print(f"PLEASE NOTE: The file {VIDEO_FILE} was not found.")
+    if not os.path.exists(VIDEO_FILE):
+        print(f"CRITICAL ERROR: Video file not found: {VIDEO_FILE}")
         return
 
-    PRODUCER_THREAD = threading.Thread(target=producer_thread, args=(cap,), name="ProducerThread")
-    PRODUCER_THREAD.daemon = True 
-    PRODUCER_THREAD.start()
-
     SERVER_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    SERVER_SOCKET.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)    
-    
+    SERVER_SOCKET.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
     try:
         SERVER_SOCKET.bind((HOST, PORT))
         SERVER_SOCKET.listen(5)
-        SERVER_SOCKET.settimeout(1) 
-        print(f"[*] Server listening at {HOST}:{PORT}. Producer active.")
+        SERVER_SOCKET.settimeout(1)
+        print(f"Server listening at {HOST}:{PORT}")
+        print(f"Available ciphers: {AVAILABLE_CIPHERS}")
 
         while SERVER_RUNNING:
             try:
                 conn, addr = SERVER_SOCKET.accept()
-                
-                client_handler = threading.Thread(target=handle_client_consumer, args=(conn, addr), name=f"Consumer-{addr[1]}")
-                client_handler.daemon = True
+                client_handler = threading.Thread(
+                    target=handle_client,
+                    args=(conn, addr),
+                    name=f"Client-{addr[1]}",
+                    daemon=True
+                )
                 client_handler.start()
                 CLIENT_THREADS.append(client_handler)
-                
             except socket.timeout:
                 continue
             except Exception as e:
                 if SERVER_RUNNING:
-                    print(f"[-] Unexpected error in main loop (accept): {e}")
-                break    
+                    print(f"Error in accept loop: {e}")
+                break
 
     except Exception as e:
-        print(f"Critical error during server initialization.: {e}")
+        print(f"Critical error during server init: {e}")
     finally:
-        print("[*] Main loop terminated. Waiting for threads to finish..")
-        
-        if PRODUCER_THREAD and PRODUCER_THREAD.is_alive():
-            SERVER_RUNNING = False
-            PRODUCER_THREAD.join(timeout=5)
-            
+        print("Main loop ended. Waiting for client threads...")
         for thread in CLIENT_THREADS:
-             if thread.is_alive():
-                 thread.join(timeout=2) 
-        
-        print("[*] Server closed successfully..")
+            if thread.is_alive():
+                thread.join(timeout=2)
+        print("Server shut down.")
 
 if __name__ == '__main__':
-
     start_server()
