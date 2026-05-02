@@ -277,7 +277,7 @@ def start_server():
         for thread in CLIENT_THREADS:
             if thread.is_alive():
                 thread.join(timeout=2)
-        print("Server shut down.")
+        print("Server shut down")
 
 if __name__ == '__main__':
     start_server()
