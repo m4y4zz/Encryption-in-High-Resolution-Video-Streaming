@@ -31,7 +31,7 @@ This project consists of a client-server infrastructure developed in Python for 
 
 ### How to Run the Project 🏃🏼‍♀️‍➡️
 
-1. Install dependencies: `pip install opencv-python pycryptodome cryptography`
+1. Install dependencies: `pip install opencv-python pycryptodome cryptography pillow numpy`
 2. Run the server: `python server.py`
 3. Run the client: `python client.py`
 
