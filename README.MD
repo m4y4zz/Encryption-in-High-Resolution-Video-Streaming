@@ -4,16 +4,16 @@ This project consists of a client-server infrastructure developed in Python for 
 
 ### Technologies
 
-> *Language*: Python
-> *Main Libraries*: OpenCV, PyCryptodome, Cryptography, Socket, Tkinter
+* *Language*: Python
+* *Main Libraries*: OpenCV, PyCryptodome, Cryptography, Socket, Tkinter
 
 ### Implemented Algorithms
 
-> *AES*
-> *ChaCha20*
-> *Salsa20*
-> *Blowfish*
-> *Camellia*
+* *AES*
+* *ChaCha20*
+* *Salsa20*
+* *Blowfish*
+* *Camellia*
 All of these algorithms used a 32 bytes key.
 
 ### Features
